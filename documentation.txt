@@ -1,0 +1,367 @@
+================================================================================
+INSURANCE FRAUD DETECTION SYSTEM — TECHNICAL DOCUMENTATION
+================================================================================
+
+Author: Kobla Mensah
+Date: February 2026
+Version: 1.0
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+
+1. Project Overview
+2. Installation & Setup
+3. Project Structure
+4. Pipeline Walkthrough
+5. Data Generation
+6. Data Preprocessing
+7. Model Architecture
+8. Training Process
+9. Evaluation Metrics
+10. Explainability Methods
+11. Streamlit Dashboard
+12. Running Tests
+13. Extending the System
+14. References
+
+================================================================================
+1. PROJECT OVERVIEW
+================================================================================
+
+This project implements a deep learning-based fraud detection system for
+insurance claims. The system uses a PyTorch feedforward neural network trained
+on synthetic insurance claims data to classify claims as fraudulent or
+legitimate.
+
+Key capabilities:
+  - Synthetic data generation with realistic fraud patterns
+  - Automated preprocessing with categorical encoding and feature scaling
+  - SMOTE oversampling for handling class imbalance
+  - 3-layer neural network with batch normalization and dropout
+  - Comprehensive evaluation metrics (accuracy, precision, recall, F1, AUC-ROC)
+  - Dual explainability: SHAP (global) and Integrated Gradients (local)
+  - Interactive Streamlit dashboard for real-time predictions
+
+================================================================================
+2. INSTALLATION & SETUP
+================================================================================
+
+Prerequisites:
+  - Python 3.9 or higher
+  - pip (Python package manager)
+
+Steps:
+  1. Clone the repository:
+     $ git clone https://github.com/KoblaMensah/Insurance-fraud-detection-pytorch.git
+     $ cd Insurance-fraud-detection-pytorch
+
+  2. Create a virtual environment (recommended):
+     $ python -m venv venv
+     $ source venv/bin/activate   # Linux/Mac
+     $ venv\Scripts\activate      # Windows
+
+  3. Install dependencies:
+     $ pip install -r requirements.txt
+
+  4. Run the full pipeline:
+     $ python run_pipeline.py
+
+  5. Launch the dashboard:
+     $ streamlit run app/dashboard.py
+
+================================================================================
+3. PROJECT STRUCTURE
+================================================================================
+
+Insurance-fraud-detection-pytorch/
+├── README.md                  Project overview and quick start
+├── PRD.md                     Product requirements document
+├── documentation.txt          This file — full technical documentation
+├── requirements.txt           Python dependencies
+├── run_pipeline.py            Main entry point — runs full pipeline
+├── data/
+│   ├── raw/                   Generated raw data (CSV)
+│   └── processed/             Preprocessed data (excluded from git)
+├── src/
+│   ├── __init__.py            Package marker
+│   ├── data_generator.py      Synthetic data generation
+│   ├── preprocessing.py       Data cleaning, encoding, scaling, SMOTE
+│   ├── dataset.py             PyTorch Dataset and DataLoader utilities
+│   ├── model.py               FraudDetector neural network architecture
+│   ├── train.py               Training loop with early stopping
+│   ├── evaluate.py            Metrics computation and visualizations
+│   └── explain.py             SHAP and Integrated Gradients explainability
+├── app/
+│   └── dashboard.py           Streamlit interactive dashboard
+├── models/                    Saved model checkpoints and plots
+├── notebooks/                 Jupyter notebooks for exploration
+└── tests/
+    └── test_model.py          Unit tests
+
+================================================================================
+4. PIPELINE WALKTHROUGH
+================================================================================
+
+The system executes in five sequential stages:
+
+Stage 1: Data Generation
+  - Generates 5,000 synthetic insurance claims
+  - Fraud rate set to 12% (realistic industry approximation)
+  - Features are biased based on fraud status to create learnable patterns
+
+Stage 2: Preprocessing
+  - Categorical variables encoded with LabelEncoder
+  - All features scaled with StandardScaler (zero mean, unit variance)
+  - Stratified 80/20 train/test split preserves fraud ratio
+  - SMOTE applied to training set only to balance classes
+
+Stage 3: Model Training
+  - FraudDetector neural network initialized with 13 input features
+  - Trained with Adam optimizer (lr=0.001, weight_decay=1e-4)
+  - BCEWithLogitsLoss for numerical stability
+  - ReduceLROnPlateau scheduler halves LR after 5 stagnant epochs
+  - Early stopping after 15 epochs without validation improvement
+
+Stage 4: Evaluation
+  - Model evaluated on held-out test set (never seen during training)
+  - Metrics: accuracy, precision, recall, F1 score, AUC-ROC
+  - Generates confusion matrix, ROC curve, and training history plots
+
+Stage 5: Explainability
+  - Integrated Gradients computed for test samples
+  - Attribution plots show per-feature contribution to each prediction
+
+================================================================================
+5. DATA GENERATION
+================================================================================
+
+File: src/data_generator.py
+
+The synthetic data generator creates realistic insurance claims by sampling
+from distributions that differ between fraudulent and legitimate claims.
+
+Feature engineering rationale:
+  - policyholder_age: Fraudsters tend younger (mean 32 vs 45)
+  - policy_tenure_months: Fraudsters have shorter tenure (mean 8 vs 36 months)
+  - claim_amount: Fraudulent claims tend higher (log-normal, mean shifted up)
+  - police_report_filed: Only 25% of fraud cases vs 72% of legitimate
+  - witnesses_present: Only 15% of fraud cases vs 55% of legitimate
+  - days_to_report: Fraudsters report slower (mean 18 vs 4 days)
+  - claim_hour: Fraudulent incidents cluster around 2 AM
+  - claim_type: Theft/Fire overrepresented in fraud
+
+These patterns are based on published insurance fraud research and industry
+reports from the Coalition Against Insurance Fraud.
+
+================================================================================
+6. DATA PREPROCESSING
+================================================================================
+
+File: src/preprocessing.py
+
+The DataPreprocessor class handles the full transformation pipeline:
+
+  1. Categorical Encoding
+     - claim_type (5 categories) → integer encoded
+     - region (3 categories) → integer encoded
+     - LabelEncoders saved for inference-time transformation
+
+  2. Feature Scaling
+     - StandardScaler normalizes all features to zero mean, unit variance
+     - Critical for neural networks: features on different scales (e.g.,
+       claim_amount in thousands vs witnesses_present as 0/1) would cause
+       gradient instability without normalization
+
+  3. Train/Test Split
+     - 80% training, 20% testing
+     - Stratified split ensures both sets have proportional fraud rates
+     - Random state fixed for reproducibility
+
+  4. SMOTE (Synthetic Minority Over-sampling Technique)
+     - Applied ONLY to training data (never test — that would be data leakage)
+     - Creates synthetic fraud examples by interpolating between existing ones
+     - Balances classes so the model doesn't just predict "not fraud" for everything
+
+================================================================================
+7. MODEL ARCHITECTURE
+================================================================================
+
+File: src/model.py
+
+Architecture: Input(13) → 64 → 32 → 16 → 1
+
+  Layer 1: Linear(13, 64) + BatchNorm + ReLU + Dropout(0.3)
+  Layer 2: Linear(64, 32) + BatchNorm + ReLU + Dropout(0.3)
+  Layer 3: Linear(32, 16) + BatchNorm + ReLU + Dropout(0.15)
+  Output:  Linear(16, 1) → raw logit
+
+Design decisions:
+  - 3 hidden layers: Sufficient for tabular data. Deeper networks offer
+    no benefit here and risk overfitting on 5,000 samples.
+  - Batch Normalization: Stabilizes training by normalizing layer inputs.
+    Reduces sensitivity to learning rate and initialization.
+  - Dropout: Randomly zeros neurons during training. Forces the network
+    to learn redundant representations, preventing over-reliance on
+    any single feature path. Rate decreases in deeper layers (0.3 → 0.15)
+    because deeper features are more abstract and less redundant.
+  - No sigmoid in forward(): BCEWithLogitsLoss combines sigmoid + BCE
+    for better numerical stability. Sigmoid applied only at inference.
+
+Total parameters: ~3,500 (intentionally small to match dataset size)
+
+================================================================================
+8. TRAINING PROCESS
+================================================================================
+
+File: src/train.py
+
+Loss Function: BCEWithLogitsLoss
+  - Binary Cross-Entropy with built-in sigmoid
+  - More numerically stable than applying sigmoid separately
+
+Optimizer: Adam (lr=0.001, weight_decay=1e-4)
+  - Adam adapts learning rates per-parameter
+  - Weight decay adds L2 regularization to prevent large weights
+
+Learning Rate Scheduler: ReduceLROnPlateau
+  - Monitors validation loss
+  - Halves learning rate after 5 epochs without improvement
+  - Allows fine-grained convergence when close to optimum
+
+Early Stopping (patience=15):
+  - Saves model checkpoint whenever validation loss improves
+  - Stops training if no improvement for 15 consecutive epochs
+  - Loads best checkpoint at the end (not the last epoch)
+
+================================================================================
+9. EVALUATION METRICS
+================================================================================
+
+File: src/evaluate.py
+
+Why multiple metrics matter for fraud detection:
+
+  Accuracy: (TP + TN) / Total
+    Misleading for imbalanced data. A model predicting "not fraud" for
+    everything achieves 88% accuracy with 12% fraud rate — but catches
+    zero fraud.
+
+  Precision: TP / (TP + FP)
+    Of claims flagged as fraud, how many actually are? High precision
+    means fewer wasted investigations on legitimate claims.
+
+  Recall: TP / (TP + FN)
+    Of all actual fraud, how many did we catch? This is typically the
+    most important metric — missed fraud is the primary cost.
+
+  F1 Score: Harmonic mean of precision and recall
+    Balances both concerns. Our primary optimization target.
+
+  AUC-ROC: Area under the ROC curve
+    Measures discrimination ability across all thresholds. AUC of 0.5
+    is random guessing; 1.0 is perfect separation.
+
+================================================================================
+10. EXPLAINABILITY METHODS
+================================================================================
+
+File: src/explain.py
+
+Two complementary approaches are implemented:
+
+SHAP (SHapley Additive exPlanations)
+  - Based on cooperative game theory (Shapley values)
+  - Assigns each feature a contribution to the prediction
+  - Model-agnostic: works with any model, not just neural networks
+  - Computationally expensive (exponential in features, approximated)
+  - Provides both global (average importance) and local (per-prediction)
+  - Industry standard for model interpretation
+
+Integrated Gradients
+  - PyTorch-native via Facebook's Captum library
+  - Computes the integral of gradients along a path from baseline to input
+  - Satisfies two key axioms:
+    1. Sensitivity: If a feature changes the prediction, it gets nonzero attribution
+    2. Implementation Invariance: Same attributions for functionally equivalent models
+  - Much faster than SHAP for neural networks
+  - Provides per-prediction feature attributions
+
+Why both? SHAP is the industry standard that reviewers expect. Integrated
+Gradients demonstrates deep learning-specific knowledge and is more practical
+for production deployment due to speed.
+
+================================================================================
+11. STREAMLIT DASHBOARD
+================================================================================
+
+File: app/dashboard.py
+
+The dashboard provides three views:
+
+  1. Default View (no prediction yet)
+     - Dataset overview with sample data
+     - Distribution charts for claim amounts and types
+
+  2. Prediction View (after clicking "Analyze Claim")
+     - Fraud probability percentage
+     - Risk level indicator (LOW/MEDIUM/HIGH)
+     - Gauge visualization of fraud score
+     - Integrated Gradients attribution chart
+
+  3. Claim Summary
+     - Table of all input values for the analyzed claim
+
+The sidebar allows adjusting all 12 input features with appropriate
+controls (sliders for ranges, dropdowns for categories).
+
+================================================================================
+12. RUNNING TESTS
+================================================================================
+
+File: tests/test_model.py
+
+Run all tests:
+  $ python tests/test_model.py
+
+Tests cover:
+  - Data generation: shape, column presence, value ranges
+  - Preprocessing: output types, feature dimensions
+  - Model forward pass: output shape correctness
+  - Predict probability: values in [0, 1] range
+  - Dataset/DataLoader: tensor creation and batching
+
+================================================================================
+13. EXTENDING THE SYSTEM
+================================================================================
+
+To use real data instead of synthetic:
+  1. Place your CSV in data/raw/
+  2. Ensure columns match the schema in PRD.md
+  3. Modify run_pipeline.py to load from CSV instead of generating
+  4. Retrain: the model architecture handles any fraud rate
+
+To add new features:
+  1. Add the feature to data_generator.py
+  2. Add it to the appropriate list in preprocessing.py (numeric or categorical)
+  3. The model input_dim adapts automatically
+
+To deploy as an API:
+  1. Save model and preprocessor (already done by pipeline)
+  2. Wrap prediction logic in a FastAPI/Flask endpoint
+  3. Load model once at startup, run inference per request
+
+================================================================================
+14. REFERENCES
+================================================================================
+
+- PyTorch Documentation: https://pytorch.org/docs/stable/
+- SHAP: Lundberg & Lee, "A Unified Approach to Interpreting Model
+  Predictions" (NeurIPS 2017)
+- Integrated Gradients: Sundararajan et al., "Axiomatic Attribution
+  for Deep Networks" (ICML 2017)
+- Captum Library: https://captum.ai/
+- SMOTE: Chawla et al., "SMOTE: Synthetic Minority Over-sampling
+  Technique" (JAIR 2002)
+- Coalition Against Insurance Fraud: https://insurancefraud.org/
+- FBI Insurance Fraud Statistics: https://www.fbi.gov/stats-services/publications/insurance-fraud
