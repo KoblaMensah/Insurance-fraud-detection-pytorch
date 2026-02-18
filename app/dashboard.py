@@ -26,6 +26,8 @@ import plotly.express as px
 
 from src.model import FraudDetector
 from src.preprocessing import DataPreprocessor
+from src.dataset import create_dataloaders
+from src.train import train_model
 from src.data_generator import generate_claims_data
 from captum.attr import IntegratedGradients
 
@@ -48,10 +50,18 @@ def load_model():
     preprocessor_path = project_root / "models" / "preprocessor.pkl"
 
     if not model_path.exists() or not preprocessor_path.exists():
-        st.error(
-            "Model not found. Run `python run_pipeline.py` first to train the model."
-        )
-        st.stop()
+        with st.spinner("Training model for the first time (this takes about a minute)..."):
+            df = generate_claims_data(n_samples=5000, fraud_rate=0.12)
+            preprocessor_tmp = DataPreprocessor()
+            data = preprocessor_tmp.fit_transform(df)
+            preprocessor_tmp.save(str(preprocessor_path))
+            train_loader, _ = create_dataloaders(data, batch_size=64)
+            test_loader = create_dataloaders(data, batch_size=64)[1]
+            input_dim = data["X_train"].shape[1]
+            mdl = FraudDetector(input_dim=input_dim)
+            train_model(mdl, train_loader, test_loader, epochs=100, lr=1e-3,
+                        patience=15, model_path=str(model_path))
+        st.success("Model trained and ready!")
 
     preprocessor = DataPreprocessor()
     preprocessor.load(str(preprocessor_path))
