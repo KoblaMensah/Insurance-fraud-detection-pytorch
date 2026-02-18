@@ -2,6 +2,8 @@
 
 A deep learning-based system for detecting fraudulent insurance claims. Built with PyTorch, this project covers the full ML lifecycle: data preprocessing, model training, evaluation, explainability (SHAP and Integrated Gradients), and an interactive Streamlit dashboard.
 
+**[Live Demo](https://insurance-fraud-detection-pytorch-kobla-mensah.streamlit.app)** — Try the deployed dashboard
+
 ## Features
 
 - **Synthetic Data Generation** — Realistic insurance claims data with configurable fraud rates and domain-informed feature distributions
@@ -9,7 +11,7 @@ A deep learning-based system for detecting fraudulent insurance claims. Built wi
 - **PyTorch Neural Network** — 3-layer feedforward architecture with batch normalization, dropout, and early stopping
 - **Comprehensive Evaluation** — Accuracy, Precision, Recall, F1, AUC-ROC with confusion matrix and ROC curve visualizations
 - **Dual Explainability** — SHAP (model-agnostic) and Integrated Gradients (gradient-based) for transparent predictions
-- **Interactive Dashboard** — Streamlit app with real-time fraud scoring, risk gauge, and feature attribution plots
+- **Interactive Dashboard** — [Deployed Streamlit app](https://insurance-fraud-detection-pytorch-kobla-mensah.streamlit.app) with real-time fraud scoring, risk gauge, and feature attribution plots
 
 ## Quick Start
 
@@ -101,6 +103,15 @@ The system provides two complementary explanation methods:
 | Explainability | SHAP, Captum |
 | Dashboard | Streamlit, Plotly |
 | Visualization | matplotlib, seaborn |
+| Deployment | Streamlit Community Cloud |
+
+## Live Dashboard
+
+The fraud detection dashboard is deployed and publicly accessible:
+
+**https://insurance-fraud-detection-pytorch-kobla-mensah.streamlit.app**
+
+Enter claim details in the sidebar, click **Analyze Claim**, and get an instant fraud risk score with feature-level explanations showing which factors drove the prediction.
 
 ## Running Tests
 
